@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: temple-postgres
+    environment:
+      POSTGRES_USER: temple_user
+      POSTGRES_PASSWORD: temple_pass
+      POSTGRES_DB: temple_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - temple-network
+
+  # MongoDB for Analytics
+  mongodb:
+    image: mongo:6
+    container_name: temple-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: temple_user
+      MONGO_INITDB_ROOT_PASSWORD: temple_pass
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - temple-network
+
+  # Redis for Caching
+  redis:
+    image: redis:7-alpine
+    container_name: temple-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - temple-network
+
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: temple-backend
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://temple_user:temple_pass@postgres:5432/temple_db
+      MONGODB_URL: mongodb://temple_user:temple_pass@mongodb:27017/temple_analytics
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - temple-network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: temple-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - temple-network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  temple-network:
+    driver: bridge
